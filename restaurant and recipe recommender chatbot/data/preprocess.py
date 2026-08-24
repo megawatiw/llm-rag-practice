@@ -12,6 +12,7 @@ warnings.warn = warn
 warnings.filterwarnings('ignore')
 
 
-process_restaurant_data()
-process_recipes_data()
-process_user_reviews_data()
+if __name__ == "__main__":
+    process_restaurant_data()
+    process_recipes_data()
+    process_user_reviews_data()

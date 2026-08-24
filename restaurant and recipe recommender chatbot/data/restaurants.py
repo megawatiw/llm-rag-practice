@@ -23,7 +23,7 @@ class Restaurant(BaseModel):
     shortcomings: List[str] = Field(default_factory=list)
 
 
-def __load_data():
+def _load_data():
     ### 1.1: Define the file_path to the text file
     file_path = "./California-Culinary-Map.txt"
 
@@ -49,7 +49,7 @@ def __load_data():
     return restaurant_list
 
 
-def __restaurant_data_structure_prompt_generation(example, restaurant_paragraph):
+def _restaurant_data_structure_prompt_generation(example, restaurant_paragraph):
     EXAMPLE_RESTAURANT_PARAGRAPH =  example  # use the second restaurant paragraph as the example
     EXAMPLE_OUTPUT = """
         {
@@ -90,7 +90,7 @@ def __restaurant_data_structure_prompt_generation(example, restaurant_paragraph)
     return base_system_msg, base_user_prompt
 
 
-def __JSON_auto_repair_prompts(candidate_json_output, error_message):
+def _JSON_auto_repair_prompts(candidate_json_output, error_message):
     auto_repair_system_msg = """
     You are a helpful assistant who helps repairing and correcting texts to conform with the required JSON format and structure.
     """
@@ -141,7 +141,7 @@ def __JSON_auto_repair_prompts(candidate_json_output, error_message):
     return auto_repair_system_msg, auto_repair_prompt
 
 
-def __save_to_postgres(db_conn, table_name, data):
+def _save_to_postgres(db_conn, table_name, data):
     structured_restaurant_lists_json = [json.loads(response) for response in data]
 
     try:
@@ -187,7 +187,7 @@ def __save_to_postgres(db_conn, table_name, data):
 
     return None
 
-def __save_to_chromadb(restaurant_list):
+def _save_to_chromadb(restaurant_list):
     db_dir = get_chromadb_dir()
 
     if os.path.isdir(db_dir):
@@ -243,15 +243,14 @@ def __save_to_chromadb(restaurant_list):
         metadatas=[d.metadata for d in article_docs],
     )
 
-
 def process_restaurant_data():
-    restaurant_list = __load_data()
+    restaurant_list = _load_data()
     llm = init_llm("meta-llama/llama-3-3-70b-instruct")
     structured_restaurant_lists = []
 
     for i, restaurant_paragraph in enumerate(restaurant_list):
         ### 2.1: Produce your initial output
-        base_system_msg, base_user_prompt = __restaurant_data_structure_prompt_generation(example=restaurant_list[1], restaurant_paragraph=restaurant_paragraph)
+        base_system_msg, base_user_prompt = _restaurant_data_structure_prompt_generation(example=restaurant_list[1], restaurant_paragraph=restaurant_paragraph)
         message = [
             {"role": "system", "content": base_system_msg},
             {"role": "user", "content": base_user_prompt}
@@ -267,7 +266,7 @@ def process_restaurant_data():
                 # print(f"Success! Validated: {restaurant_data.name}")
                 break
             except ValidationError as e:
-                auto_repair_system_msg, auto_repair_prompt = __JSON_auto_repair_prompts(structured_output, e.json())
+                auto_repair_system_msg, auto_repair_prompt = _JSON_auto_repair_prompts(structured_output, e.json())
                 structured_output = llm.chat([
                     {"role": "system", "content": auto_repair_system_msg},
                     {"role": "user", "content": auto_repair_prompt}
@@ -286,7 +285,25 @@ def process_restaurant_data():
 
     db_conn = DatabaseConnection()
     db_conn.connect()
-    __save_to_postgres(db_conn, "restaurants", structured_restaurant_lists)
+    _save_to_postgres(db_conn, "restaurants", structured_restaurant_lists)
     db_conn.disconnect()
 
-    __save_to_chromadb(structured_restaurant_lists)
+    _save_to_chromadb(structured_restaurant_lists)
+
+
+def add_restaurant(name, cuisine, price_range, location, description):
+    db_conn = DatabaseConnection()
+    db_conn.connect()
+
+    # Insert the new restaurant into the database
+    try:
+        db_conn.insert_item(f"""
+            INSERT INTO restaurants (name, type, price_range, location, environment)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (name, cuisine, price_range, location, description))
+        status = f"Restaurant '{name}' added successfully!"
+    except Exception as e:
+        status = f"Error adding restaurant: {e}"
+
+    db_conn.disconnect()
+    return status

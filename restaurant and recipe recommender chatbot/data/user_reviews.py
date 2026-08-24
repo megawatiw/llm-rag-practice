@@ -15,17 +15,17 @@ from utils.utils import *
 ### URL Request function with Retry
 # Retries up to 10 times, starting at 1s and doubling (1s, 2s, 4s...)
 @retry(stop=stop_after_attempt(10), wait=wait_exponential(multiplier=1, min=1, max=10))
-def __get_data_with_retry(url):
+def _get_data_with_retry(url):
     response = requests.get(url, timeout=5)
     response.raise_for_status() # Must raise error for retry to trigger
     return response
 
-def __load_data():
+def _load_data():
     with open('./data/Synthetic_User_Reviews.json', 'r') as file:
         user_review_data = json.load(file)
     return user_review_data
 
-def __review_context_image_caption_prompt_template(reviews):
+def _review_context_image_caption_prompt_template(reviews):
     # reviews: the written review content
 
     ### Step 2.1: Design your prompts
@@ -37,7 +37,7 @@ def __review_context_image_caption_prompt_template(reviews):
     return review_context_image_caption_system_msg, review_context_image_caption_prompt_txt
 
 
-def __save_to_db(db_conn, table_name, data):
+def _save_to_db(db_conn, table_name, data):
     structured_reviews_lists_json = [json.loads(response) for response in data]
 
     try:
@@ -82,7 +82,7 @@ def __save_to_db(db_conn, table_name, data):
 
 
 def process_user_reviews_data():
-    user_review_data = __load_data()
+    user_review_data = _load_data()
     vision_llm = init_llm("meta-llama/llama-4-maverick-17b-128e-instruct-fp8")
 
     for i in range(len(user_review_data)):
@@ -94,7 +94,7 @@ def process_user_reviews_data():
             for img_url in review_images:
                 try:
                     ### Step 3.2: Use get_data_with_retry to get the image_data
-                    image_data = __get_data_with_retry(img_url)
+                    image_data = _get_data_with_retry(img_url)
                     print("Success!")
                 except Exception as e:
                     print(f"All retries failed at url {img_url}:", e)
@@ -110,7 +110,7 @@ def process_user_reviews_data():
                 img_base64 = base64.b64encode(img_bytes).decode("utf-8")
 
                 ### Step 3.4: Get the prompts, get the response, and finally append the response to review_image_captions
-                review_context_image_caption_system_msg, review_context_image_caption_prompt_txt = __review_context_image_caption_prompt_template(
+                review_context_image_caption_system_msg, review_context_image_caption_prompt_txt = _review_context_image_caption_prompt_template(
                     user_review_data[i]['text'])
 
                 ### Step 3.5: Define the messages for the model
@@ -138,7 +138,7 @@ def process_user_reviews_data():
 
     db_conn = DatabaseConnection()
     db_conn.connect()
-    __save_to_db(db_conn, "user_reviews", user_review_data)
+    _save_to_db(db_conn, "user_reviews", user_review_data)
     db_conn.disconnect()
 
 

@@ -12,13 +12,13 @@ from utils.database import *
 from utils.utils import *
 
 
-def __load_data():
+def _load_data():
     with open('./data/Recipes.json', 'r') as file:
         recipe_data = json.load(file)
     return recipe_data
 
 
-def __image_caption_prompt_template(food_name):
+def _image_caption_prompt_template(food_name):
     # food_name: the food name of the recipe
 
     ### Step 3.1: Design the prompts
@@ -29,7 +29,7 @@ def __image_caption_prompt_template(food_name):
     return image_caption_system_msg, image_caption_prompt_txt
 
 
-def __save_to_db(db_conn, table_name, data):
+def _save_to_db(db_conn, table_name, data):
     structured_recipes_lists_json = [json.loads(response) for response in data]
 
     try:
@@ -72,7 +72,7 @@ def __save_to_db(db_conn, table_name, data):
 
     return
 
-def __save_to_chromadb(recipe_list):
+def _save_to_chromadb(recipe_list):
     db_dir = get_chromadb_dir()
 
     if os.path.isdir(db_dir):
@@ -120,7 +120,7 @@ def __save_to_chromadb(recipe_list):
 
 
 def process_recipes_data():
-    recipe_list = __load_data()
+    recipe_list = _load_data()
     vision_llm = init_llm("meta-llama/llama-4-maverick-17b-128e-instruct-fp8")
 
     for i in range(len(recipe_list)):
@@ -129,7 +129,7 @@ def process_recipes_data():
 
         ### Step 4.1: Get the caption prompts
         food_name = recipe_list[i]['name']
-        image_caption_system_msg, image_caption_prompt_txt = __image_caption_prompt_template(food_name)
+        image_caption_system_msg, image_caption_prompt_txt = _image_caption_prompt_template(food_name)
 
         ### Step 4.2: Encode the input image to a base64 string
         food_id = recipe_list[i]['id']
@@ -163,7 +163,41 @@ def process_recipes_data():
 
     db_conn = DatabaseConnection()
     db_conn.connect()
-    __save_to_db(db_conn, "recipes", recipe_list)
+    _save_to_db(db_conn, "recipes", recipe_list)
     db_conn.disconnect()
 
-    __save_to_chromadb(recipe_list)
+    _save_to_chromadb(recipe_list)
+
+
+def add_recipe(name, cuisine, difficulty, prep_time, ingredients, instructions):
+    db_conn = DatabaseConnection()
+    db_conn.connect()
+
+    # Generate a new ID for the recipe
+    db_conn.cursor.execute("SELECT MAX(id) FROM recipes")
+    max_id = db_conn.cursor.fetchone()[0]
+    new_id = (max_id or 0) + 1
+
+    # Insert the new recipe into the database
+    try:
+        db_conn.insert_item(f"""
+            INSERT INTO recipes (id, name, cuisine, servings, prep_time, cook_time, total_time, ingredients, instructions)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            new_id,
+            name,
+            cuisine,
+            1,  # Default servings to 1
+            prep_time,
+            "",  # Cook time is empty for now
+            "",  # Total time is empty for now
+            ingredients.split(','),  # Split ingredients by comma
+            instructions.split('\n')  # Split instructions by newline
+        ))
+        db_conn.conn.commit()
+        status = f"Recipe '{name}' added successfully with ID {new_id}."
+    except Exception as e:
+        status = f"Error adding recipe: {e}"
+
+    db_conn.disconnect()
+    return status
