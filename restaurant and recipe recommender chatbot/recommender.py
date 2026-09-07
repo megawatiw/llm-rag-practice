@@ -1,14 +1,20 @@
 import numpy as np
 import os
 from typing import List, Tuple, Dict, Any
+
+from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_chroma import Chroma
 from utils.utils import retrieve_articles, retrieve_images_by_text
 from utils.database import get_chromadb_dir
 
+load_dotenv()
+gemini_api_key = os.getenv("GOOGLE_API_KEY")
 
-gemini_api_key = "AIzaSyBk6M77Wp9I9Ch7edPtmgGVe02ZsLqebn0"
+if not gemini_api_key:
+    raise RuntimeError("API key not found.")
+
 llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash-lite", google_api_key=gemini_api_key, temperature=0.7)
 
 

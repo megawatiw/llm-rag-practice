@@ -1,9 +1,11 @@
 import numpy as np
 import torch
+import os
 from PIL import Image
 from langchain_chroma import Chroma
 from sentence_transformers import SentenceTransformer
 from transformers import CLIPModel, CLIPProcessor
+from dotenv import load_dotenv
 
 # IBM WatsonX imports
 from ibm_watsonx_ai import Credentials
@@ -13,6 +15,8 @@ from ibm_watsonx_ai.foundation_models.utils.enums import (
     ModelTypes,
     DecodingMethods,
 )
+
+load_dotenv()
 
 # ---- Text embedding model (384-d) ----
 text_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -39,11 +43,15 @@ def _to_similarity(dists):
     return 1.0 - d
 
 def init_llm(model_id):
-    project_id = "5177c3e8-f1b6-4221-bfb0-f6ea5ce551cb"
-    api_key = "bLh7dxSZkViRM9dGoOGEsEocTf8ke8tikR3uD15CSr2s"
+    project_id = os.getenv("IBM_PROJECT_ID")
+    project_url = os.getenv("IBM_PROJECT_URL")
+    api_key = os.getenv("IBM_API_KEY")
+
+    if not project_id or not project_url or not api_key:
+        raise RuntimeError("Project credentials not found.")
 
     credentials = Credentials(
-        url="https://jp-tok.ml.cloud.ibm.com",
+        url=project_url,
         api_key=api_key
     )
 
