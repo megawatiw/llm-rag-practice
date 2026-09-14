@@ -1,6 +1,7 @@
 import shutil
 import json
 import os
+from datetime import datetime
 
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field, ValidationError
@@ -141,12 +142,12 @@ def _JSON_auto_repair_prompts(candidate_json_output, error_message):
     return auto_repair_system_msg, auto_repair_prompt
 
 
-def _save_to_postgres(db_conn, table_name, data):
+def _save_restaurant(db_conn, table_name, data):
     structured_restaurant_lists_json = [json.loads(response) for response in data]
 
     try:
         if not db_conn.table_exists(table_name):
-            db_conn.create_table(f"""
+            db_conn.create_table( f"""
                 CREATE TABLE {table_name} (
                     itemId INTEGER PRIMARY KEY,
                     name VARCHAR(255),
@@ -174,7 +175,7 @@ def _save_to_postgres(db_conn, table_name, data):
                 INSERT INTO {table_name} (itemId, name, location, type, food_style, rating, price_range, signatures, vibe, environment, shortcomings)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (itemId) DO UPDATE SET
-                name=EXCLUDED.name, location=EXCLUDED.location, type=EXCLUDED.typ e
+                name=EXCLUDED.name, location=EXCLUDED.location, type=EXCLUDED.type
             """, (
                 restaurant['itemId'], restaurant['name'], restaurant['location'],
                 restaurant['type'], restaurant['food_style'], restaurant.get('rating'),
@@ -187,12 +188,7 @@ def _save_to_postgres(db_conn, table_name, data):
 
     return None
 
-def _save_to_chromadb(restaurant_list):
-    db_dir = get_chromadb_dir()
-
-    if os.path.isdir(db_dir):
-        shutil.rmtree(db_dir)  # Reset vector DB (important for reruns)
-
+def _save_restaurant_text_embeddings(db_conn, table_name, restaurant_list):
     article_docs = []
 
     for i, r in enumerate(restaurant_list):
@@ -231,17 +227,22 @@ def _save_to_chromadb(restaurant_list):
 
     A = embed_texts([d.page_content for d in article_docs])
 
-    article_db = Chroma(
-        collection_name="restaurant_articles",
-        persist_directory=db_dir,
-    )
+    for i in range(len(A)):
+        itemId = 1000001 + i
+        try:
+            db_conn.insert_item(f"""
+                INSERT INTO {table_name} (itemId, embedding, text, model_name, created_at)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (itemId) DO UPDATE SET
+                text=EXCLUDED.text, model_name=EXCLUDED.model_name
+            """, (
+                itemId, A[i][1], article_docs[i].page_content, "meta-llama/llama-3-3-70b-instruct", datetime.now()
+            ))
+        except Exception as e:
+            print(f"Error inserting restaurant: {e}")
+            continue
 
-    article_db._collection.upsert(
-        ids=[d.metadata["doc_id"] for d in article_docs],
-        embeddings=A.tolist(),
-        documents=[d.page_content for d in article_docs],
-        metadatas=[d.metadata for d in article_docs],
-    )
+    return None
 
 def process_restaurant_data():
     restaurant_list = _load_data()
@@ -285,25 +286,8 @@ def process_restaurant_data():
 
     db_conn = DatabaseConnection()
     db_conn.connect()
-    _save_to_postgres(db_conn, "restaurants", structured_restaurant_lists)
+    _save_restaurant(db_conn, "restaurants", structured_restaurant_lists)
+    _save_restaurant_text_embeddings(db_conn, "restaurants_text_embeddings", structured_restaurant_lists)
     db_conn.disconnect()
 
-    _save_to_chromadb(structured_restaurant_lists)
-
-
-def add_restaurant(name, cuisine, price_range, location, description):
-    db_conn = DatabaseConnection()
-    db_conn.connect()
-
-    # Insert the new restaurant into the database
-    try:
-        db_conn.insert_item(f"""
-            INSERT INTO restaurants (name, type, price_range, location, environment)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (name, cuisine, price_range, location, description))
-        status = f"Restaurant '{name}' added successfully!"
-    except Exception as e:
-        status = f"Error adding restaurant: {e}"
-
-    db_conn.disconnect()
-    return status
+    # _save_to_chromadb(structured_restaurant_lists)
