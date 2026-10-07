@@ -72,52 +72,6 @@ def _save_to_db(db_conn, table_name, data):
 
     return
 
-def _save_to_chromadb(recipe_list):
-    db_dir = get_chromadb_dir()
-
-    if os.path.isdir(db_dir):
-        shutil.rmtree(db_dir)  # Reset vector DB (important for reruns)
-
-    IMG_DIR = "data"
-    image_paths = sorted(glob.glob(f"{IMG_DIR}/**/*.png", recursive=True))
-
-    image_docs = []
-
-    for i, (p, rec) in enumerate(zip(image_paths, recipe_list)):
-        doc_id = f"img_{i}"
-
-        image_docs.append(
-            Document(
-                # keeps retrieval results readable
-                page_content=rec.get("name", f"recipe image {i}"),
-                metadata={
-                    "doc_id": doc_id,
-                    "image_path": p,
-                    "source": "recipe_image",
-                    "recipe_id": rec.get("id"),
-                    "cuisine": rec.get("cuisine"),
-                },
-            )
-        )
-
-    print("✅ image docs:", len(image_docs))
-
-    V = embed_images([d.metadata["image_path"] for d in image_docs])
-
-    image_db = Chroma(
-        collection_name="food_images",
-        persist_directory=db_dir,
-    )
-
-    image_db._collection.upsert(
-        ids=[d.metadata["doc_id"] for d in image_docs],
-        embeddings=V.tolist(),
-        documents=[d.page_content for d in image_docs],
-        metadatas=[d.metadata for d in image_docs],
-    )
-
-    print("✅ Image DB ready")
-
 
 def process_recipes_data():
     recipe_list = _load_data()
@@ -165,8 +119,6 @@ def process_recipes_data():
     db_conn.connect()
     _save_to_db(db_conn, "recipes", recipe_list)
     db_conn.disconnect()
-
-    _save_to_chromadb(recipe_list)
 
 
 def add_recipe(name, cuisine, difficulty, prep_time, ingredients, instructions):

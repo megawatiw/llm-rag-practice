@@ -2,8 +2,8 @@ import gradio as gr
 import json
 from typing import List, Tuple, Dict, Any
 from recommender import *
-from data.restaurants import add_restaurant
-from data.recipes import add_recipe
+from services.restaurants_service import RestaurantService
+from services.recipe_service import RecipeService
 
 # Create the main interface with tabs
 with gr.Blocks(title="Food Recommendation Chatbot", theme=gr.themes.Soft()) as demo:

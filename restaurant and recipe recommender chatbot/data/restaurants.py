@@ -149,7 +149,7 @@ def _save_restaurant(db_conn, table_name, data):
         if not db_conn.table_exists(table_name):
             db_conn.create_table( f"""
                 CREATE TABLE {table_name} (
-                    itemId INTEGER PRIMARY KEY,
+                    restaurant_id INTEGER PRIMARY KEY,
                     name VARCHAR(255),
                     location VARCHAR(255),
                     type VARCHAR(255),
@@ -172,9 +172,9 @@ def _save_restaurant(db_conn, table_name, data):
         restaurant['itemId'] = 1000001 + i
         try:
             db_conn.insert_item(f"""
-                INSERT INTO {table_name} (itemId, name, location, type, food_style, rating, price_range, signatures, vibe, environment, shortcomings)
+                INSERT INTO {table_name} (restaurant_id, name, location, type, food_style, rating, price_range, signatures, vibe, environment, shortcomings)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (itemId) DO UPDATE SET
+                ON CONFLICT (restaurant_id) DO UPDATE SET
                 name=EXCLUDED.name, location=EXCLUDED.location, type=EXCLUDED.type
             """, (
                 restaurant['itemId'], restaurant['name'], restaurant['location'],
